@@ -5,8 +5,8 @@ import cookieParser from "cookie-parser";
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import dotenv from "dotenv";
-import { seedAdmin } from "../backend/src/controllers/auth.controllers.js";
-
+import { seedAdmin } from "./src/controllers/auth.controllers.js";
+import authController from "./src/controllers/auth.controllers.js";
 import healthCheckRouter from "./src/routes/healthcheck.routes.js";
 import authRouter from "./src/routes/auth.route.js";
 
@@ -39,7 +39,6 @@ app.use(
   })
 );
 
-// ✅ Remove or replace this line
 // app.options("*", cors());   <-- causes PathError
 
 // Cloudinary config

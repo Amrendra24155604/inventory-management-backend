@@ -36,8 +36,7 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
-app.options("*", cors());
-
+app.options(/.*/, cors());
 
 // Cloudinary config
 cloudinary.config({

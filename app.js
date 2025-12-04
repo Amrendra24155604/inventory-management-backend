@@ -18,7 +18,6 @@ app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(express.static("public"));
 app.use(cookieParser());
 
-// ✅ Robust CORS setup
 const allowedOrigins = ["http://localhost:5173", "http://10.192.218.149:5173"];
 
 app.use(
@@ -37,8 +36,8 @@ app.use(
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+app.options("*", cors());
 
-// app.options("*", cors());   <-- causes PathError
 
 // Cloudinary config
 cloudinary.config({

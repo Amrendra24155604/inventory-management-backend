@@ -7,8 +7,8 @@ import jwt from "jsonwebtoken"
 
 const options = {
   httpOnly: true,
-  secure: true,
-  sameSite: "none", // Required for cross-origin cookies
+  secure: process.env.NODE_ENV === "production", // true in production (HTTPS), false in development (HTTP)
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // "none" for cross-origin in prod, "lax" for same-origin in dev
   maxAge: 15 * 60 * 1000 
 };
 

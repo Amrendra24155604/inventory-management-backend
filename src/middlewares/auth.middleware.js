@@ -18,7 +18,13 @@ console.log("Authorization Header:", req.header("Authorization"));
     
         throw new ApiError(401,"Unauthorized request")
     }
-
+console.log("Cookies:", req.cookies);
+try {
+  const decoded = jwt.verify(req.cookies.accessToken, process.env.ACCESS_TOKEN_SECRET);
+  console.log("Decoded token:", decoded);
+} catch (err) {
+  console.error("JWT verify failed:", err.message);
+}
     try {
         const decodedToken = jwt.verify(token,process.env.ACCESS_TOKEN_SECRET)
         const user = await User.findById(decodedToken?._id).select("-password -emailVerificationToken -emailVerificationExpiry -refreshToken")

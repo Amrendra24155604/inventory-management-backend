@@ -8,7 +8,8 @@ import jwt from "jsonwebtoken"
 const options = {
   httpOnly: true,
   secure: true,
-  sameSite: "None", // Required for cross-origin cookies
+  sameSite: "none", // Required for cross-origin cookies
+  maxAge: 15 * 60 * 1000 
 };
 
 //on the view admin page the admin can either accept or decline a request
@@ -569,7 +570,7 @@ const completeProfile = asyncHandler(async (req, res) => {
   user.rollNumber = rollNumber;
   user.domain = domain;
   if (photoUrl) {
-    user.photoUrl = photoUrl;   // 👈 save Cloudinary URL if provided
+    user.photoUrl = photoUrl;   // save Cloudinary URL if provided
   }
   user.isProfileCompleted = true;
 

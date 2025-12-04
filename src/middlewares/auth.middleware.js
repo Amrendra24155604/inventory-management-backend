@@ -10,6 +10,7 @@ const token =
   req.cookies?.accessToken ||
   (authHeader && authHeader.startsWith("Bearer ") ? authHeader.split(" ")[1] : null);
 console.log("Cookies:", req.cookies);
+console.log("Authorization Header:", req.headers.authorization);
 // console.log("Access Token:", accessToken);
 // console.log("Refresh Token:",req.refreshToken);
 console.log("Authorization Header:", req.header("Authorization"));

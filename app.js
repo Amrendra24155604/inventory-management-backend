@@ -79,11 +79,9 @@ app.post("/api/v1/upload", upload.array("photos", 5), async (req, res) => {
 
 // Serve Vite frontend build
 // Serve Vite frontend build
-app.use(express.static(path.join(__dirname, "frontend/dist")));
-
-// Catch-all for client-side routes
+app.use(express.static(path.join(__dirname, "dist")));
 app.use((req, res) => {
-  res.sendFile(path.join(__dirname, "frontend/dist", "index.html"));
+  res.sendFile(path.join(__dirname, "dist", "index.html"));
 });
 // Seed admin
 seedAdmin();

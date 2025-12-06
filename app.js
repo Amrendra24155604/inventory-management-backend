@@ -5,6 +5,9 @@ import cookieParser from "cookie-parser";
 import multer from "multer";
 import { v2 as cloudinary } from "cloudinary";
 import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+
 import { seedAdmin } from "./src/controllers/auth.controllers.js";
 import healthCheckRouter from "./src/routes/healthcheck.routes.js";
 import authRouter from "./src/routes/auth.route.js";
@@ -12,17 +15,20 @@ import authRouter from "./src/routes/auth.route.js";
 dotenv.config();
 const app = express();
 
+// Resolve __dirname in ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 // Basic configuration
 app.use(express.json({ limit: "16kb" }));
 app.use(express.urlencoded({ extended: true, limit: "16kb" }));
-app.use(express.static("public"));
 app.use(cookieParser());
 
+// CORS setup
 const allowedOrigins = [
   "http://localhost:5173", // local dev
   "https://inventory-management-frontend-5ioh.vercel.app", // deployed frontend
 ];
-
 app.use(
   cors({
     origin: function (origin, callback) {
@@ -32,8 +38,9 @@ app.use(
         callback(new Error("Not allowed by CORS"));
       }
     },
-  credentials: true
-}));
+    credentials: true,
+  })
+);
 app.options(/.*/, cors());
 
 // Cloudinary config
@@ -50,16 +57,11 @@ const storage = multer.diskStorage({
 });
 const upload = multer({ storage });
 
-// Routes
+// API Routes
 app.use("/api/v1/healthcheck", healthCheckRouter);
 app.use("/api/v1/auth", authRouter);
 
-// Sample route
-app.get("/", (req, res) => {
-  res.send("Hello World!");
-});
-
-// File upload route (generic)
+// File upload route
 app.post("/api/v1/upload", upload.array("photos", 5), async (req, res) => {
   try {
     const photoUrls = [];
@@ -73,6 +75,14 @@ app.post("/api/v1/upload", upload.array("photos", 5), async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// Serve Vite frontend build
+app.use(express.static(path.join(__dirname, "frontend/dist")));
+
+// Catch-all: send index.html for frontend routes
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "frontend/dist", "index.html"));
 });
 
 // Seed admin

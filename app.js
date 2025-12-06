@@ -80,11 +80,15 @@ app.post("/api/v1/upload", upload.array("photos", 5), async (req, res) => {
 // Serve Vite frontend build
 app.use(express.static(path.join(__dirname, "frontend/dist")));
 
-// Catch-all: send index.html for frontend routes
-app.get("*", (req, res) => {
+// ✅ Works in Express 5
+app.get("/*", (req, res) => {
   res.sendFile(path.join(__dirname, "frontend/dist", "index.html"));
 });
 
+// or more explicit
+app.get("/:path(*)", (req, res) => {
+  res.sendFile(path.join(__dirname, "frontend/dist", "index.html"));
+});
 // Seed admin
 seedAdmin();
 

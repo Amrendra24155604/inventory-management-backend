@@ -263,15 +263,7 @@ const googleAuthHandler = asyncHandler(async (req, res) => {
       message: "Failed to retrieve user after creation",
     });
   }
-   // 🔑 Generate JWT
-  const token = jwt.sign({ id: createdUser._id }, process.env.JWT_SECRET, {
-    expiresIn: "15m",
-  });
-
-  // 🔑 Set cookie
-  res.cookie("token", token, options);
-
-
+  
   return res.status(200).json(
     new ApiResponse(200, { user: createdUser }, "Google user authenticated successfully")
   );

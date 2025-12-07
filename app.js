@@ -28,7 +28,8 @@ app.use(cookieParser());
 const allowedOrigins = [
   "http://localhost:5173", // local dev
   "https://inventory-management-frontend-5ioh.vercel.app",
-  "https://inventory-management-frontend-9mr3.vercel.app"
+  "https://inventory-management-frontend-9mr3.vercel.app",
+  "https://iotinventory.vercel.app"
     // deployed frontend
 ];
 app.use(

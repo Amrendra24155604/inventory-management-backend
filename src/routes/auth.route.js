@@ -15,8 +15,7 @@ router.post("/test", (req, res) => {
 });
 router.post("/register",userRegisterValidator(),validate, registerUser)
 router.get("/verify-email/:verificationToken",verifyEmail)
-router.get("/email-verified/:verificationToken", verifyEmail); // ✅ preferred
-
+router.get("/email-verified/:verificationToken", verifyEmail);
 router.get("/refresh-token",refreshAccessToken)
 router.post("/forgot-password",userForgotPasswordValidator(),validate,forgotPasswordRequest)
 router.post("/reset-password/:resetToken",userResetForgotPasswordValidator(),validate,resetForgotPassword)
@@ -74,7 +73,7 @@ import {
 
 
 // User routes
-router.post("/", verifyJWT, createBorrowRequest);
+router.post("/borrow", verifyJWT, createBorrowRequest);
 router.get("/my", verifyJWT, getMyBorrowRequests);
 router.patch("/:id/return", verifyJWT, requestReturn);
 

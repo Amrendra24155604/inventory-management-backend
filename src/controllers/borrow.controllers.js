@@ -60,9 +60,11 @@ const createBorrowRequest = async (req, res) => {
       user: userId,
       items,
       ...(purpose && { purpose }),
-      ...(expiry && { expiry })
+      ...(expiry && { expiry }),
+      status: "pending"
     });
-
+    console.log(BorrowRequest?.status);
+    
     res.status(201).json({
       success: true,
       data: borrowRequest,

@@ -9,7 +9,7 @@ const options = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production", // true in production (HTTPS), false in development (HTTP)
   sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // "none" for cross-origin in prod, "lax" for same-origin in dev
-  maxAge: 15 * 60 * 1000 
+  maxAge: 15 * 60 * 1000 *10
 };
 
 //on the view admin page the admin can either accept or decline a request

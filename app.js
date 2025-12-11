@@ -30,7 +30,8 @@ const allowedOrigins = [
   "https://inventory-management-frontend-5ioh.vercel.app",
   "https://inventory-management-frontend-9mr3.vercel.app",
   "https://iotinventory.vercel.app",
-  "https://inventory-management-frontend-8cxx.vercel.app"
+  "https://inventory-management-frontend-8cxx.vercel.app",
+  "iot-inventory.vercel.app"
     // deployed frontend
 ];
 app.use(

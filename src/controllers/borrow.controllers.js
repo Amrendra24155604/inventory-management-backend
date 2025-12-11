@@ -186,9 +186,9 @@ const requestReturn = async (req, res) => {
 const declineBorrowRequest = async (req, res) => {
   try {
     const request = await BorrowRequest.findById(req.params.id);
-    if (!request || request.status !== "pending") {
-      return res.status(400).json({ message: "Invalid request.", timestamp: new Date().toISOString() });
-    }
+    if (!request || !["pending", "on-hold"].includes(request.status)) {
+  return res.status(400).json({ message: "Invalid request.", timestamp: new Date().toISOString() });
+}
 
     request.status = "declined";
     await request.save();

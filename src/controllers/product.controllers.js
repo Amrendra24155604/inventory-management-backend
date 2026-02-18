@@ -119,7 +119,7 @@ const updateProduct = asyncHandler(async (req, res) => {
     { name, variant, photoUrl, initialQuantity, quantityAvailable },
     { new: true }
   );
-
+await product.save();
   res.json(product);
 });
 

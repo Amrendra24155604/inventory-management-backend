@@ -9,7 +9,7 @@ const options = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production", // true in production (HTTPS), false in development (HTTP)
   sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // "none" for cross-origin in prod, "lax" for same-origin in dev
-  maxAge: 15 * 60 * 1000 *10
+  maxAge: 30 * 24 * 60 * 60 * 1000
 };
 
 //on the view admin page the admin can either accept or decline a request
@@ -91,7 +91,7 @@ const requestAdminAccess = asyncHandler(async (req, res) => {
 });
 
 const seedAdmin = async () => {
-  const email = "amrendraky06@gmail.com";
+  const email = "amrendraky06@gmail.com"||"23052199@kiit.ac.in";
   const user = await User.findOne({ email });
   if (user && user.role !== "admin") {
     user.role = "admin";

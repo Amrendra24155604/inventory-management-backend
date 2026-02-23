@@ -45,7 +45,7 @@ router.get("/teams",teamDetails)
 
 
 // Get all products
-router.get("/productList",verifyJWT, isAdmin,allProducts);
+router.get("/productList",verifyJWT,allProducts);
 
 // Create a product
 router.post("/createProduct",verifyJWT, isAdmin, createProduct);

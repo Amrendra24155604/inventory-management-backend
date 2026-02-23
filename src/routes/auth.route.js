@@ -87,7 +87,3 @@ router.patch("/borrow/:id/hold", holdBorrowRequest);
 router.delete("/borrow/:id", verifyJWT, isAdmin, deleteBorrowRequest);
 router.get("/borrow/expired-approved", verifyJWT,isAdmin, getExpiredApprovedBorrows);
 export default router
-<<<<<<< HEAD
-// Add to your routes temporarily
-=======
->>>>>>> ad07205e46139cebee6374db4dbce63f06d340fd

@@ -4,12 +4,19 @@ import { ApiError } from "../utils/api-error.js";
 import { ApiResponse } from "../utils/api-response.js";
 import { emailVerificationMailgenContent, forgotPasswordMailgenContent, sendEmail } from "../utils/mail.js";
 import jwt from "jsonwebtoken"
+const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
+const HUNDRED_DAYS_MS = 100 * 24 * 60 * 60 * 1000; // 100 days
 
-const options = {
+const cookieOptions = {
   httpOnly: true,
-  secure: process.env.NODE_ENV === "production", // true in production (HTTPS), false in development (HTTP)
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax", // "none" for cross-origin in prod, "lax" for same-origin in dev
-  maxAge: 30 * 24 * 60 * 60 * 1000
+  secure: process.env.NODE_ENV === "production",
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+  maxAge: THIRTY_DAYS_MS // Access token cookie lives 30 days
+};
+
+const refreshCookieOptions = {
+  ...cookieOptions,
+  maxAge: HUNDRED_DAYS_MS // Refresh token cookie lives 100 days
 };
 
 //on the view admin page the admin can either accept or decline a request
@@ -202,19 +209,47 @@ export const getMemberProfile = async (req, res) => {
   }
 };
 
-const generateAccessAndRefreshToken = async (userId) =>{
-    try {
-        const user = await User.findById(userId)
-        const accessToken = user.generateAccessToken()
-        const refreshToken = user.generateRefreshToken()
-        user.refreshToken = refreshToken
-        await user.save({validateBeforeSave:false})
-        return {accessToken,refreshToken}
-    } catch (error) {
-        console.error("Token generation error:", error);
-        throw new ApiError(500,"OOPS,something went wrong")
-    }
-}
+// const generateAccessAndRefreshToken = async (userId) =>{
+//     try {
+//         const user = await User.findById(userId)
+//         const accessToken = user.generateAccessToken()
+//         const refreshToken = user.generateRefreshToken()
+//         user.refreshToken = refreshToken
+//         await user.save({validateBeforeSave:false})
+//         return {accessToken,refreshToken}
+//     } catch (error) {
+//         console.error("Token generation error:", error);
+//         throw new ApiError(500,"OOPS,something went wrong")
+//     }
+// }
+const generateAccessAndRefreshToken = async (userId) => {
+  try {
+    const user = await User.findById(userId);
+
+    // Generate access token with expiry from .env
+    const accessToken = jwt.sign(
+      { _id: user._id },
+      process.env.ACCESS_TOKEN_SECRET,
+      { expiresIn: process.env.ACCESS_TOKEN_EXPIRY } // "30d"
+    );
+
+    // Generate refresh token with expiry from .env
+    const refreshToken = jwt.sign(
+      { _id: user._id },
+      process.env.REFRESH_TOKEN_SECRET,
+      { expiresIn: process.env.REFRESH_TOKEN_EXPIRY } // "100d"
+    );
+
+    // Save refresh token in DB for revocation/rotation
+    user.refreshToken = refreshToken;
+    await user.save({ validateBeforeSave: false });
+
+    return { accessToken, refreshToken };
+  } catch (error) {
+    console.error("Token generation error:", error);
+    throw new ApiError(500, "OOPS, something went wrong");
+  }
+};
 
 import { validationResult } from "express-validator";
 
@@ -299,8 +334,8 @@ const googleLoginHandler = asyncHandler(async (req, res) => {
     
     return res
     .status(200)
-    .cookie("accessToken", accessToken, options)
-    .cookie("refreshToken", refreshToken, options)
+    .cookie("accessToken", accessToken, cookieOptions)
+    .cookie("refreshToken", refreshToken, cookieOptions)
     .json(
       new ApiResponse(
         200,
@@ -642,32 +677,63 @@ const resendEmailVerification = asyncHandler(async(req,res)=>{
     }
     return res.status(200).json(new ApiResponse(200,{},"mail sent to your email id"))
 })
-
-const refreshAccessToken = asyncHandler(async(req,res,next)=>{
-  const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken
+const refreshAccessToken = asyncHandler(async (req, res) => {
+  // Get refresh token from cookies FIRST (most secure)
+  let incomingRefreshToken = req.cookies.refreshToken;
   
-  if(!incomingRefreshToken) throw new ApiError(401,"Unauthorized access")
+  // Fallback to body if no cookie (less secure, but works)
+  if (!incomingRefreshToken) {
+    incomingRefreshToken = req.body.refreshToken;
+  }
+  
+  if (!incomingRefreshToken) {
+    throw new ApiError(401, "No refresh token provided");
+  }
+  
+  try {
+    // Verify refresh token
+    const decodedToken = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET);
+    const user = await User.findById(decodedToken._id);
     
-    try {
-      const decodedToken = jwt.verify(incomingRefreshToken,process.env.REFRESH_TOKEN_SECRET)
-      const user = await User.findById(decodedToken?._id)
-      if(!user) throw new ApiError(401,"Inavlid Refresh Token")
-        if(incomingRefreshToken!==user?.refreshToken)
-          throw new ApiError(401,"expired Refresh Token")
-        
-        // const options = {
-          //     httpOnly:true,
-          //     secure:true
-          // }
-          const {accessToken,refreshToken:newRefreshToken} = await generateAccessAndRefreshToken(user._id)
-          user.refreshToken = newRefreshToken
-          await user.save()
-          return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",newRefreshToken,options).json(new ApiResponse(200,{accessToken,refreshToken:newRefreshToken},"Access token refreshed"))
-          
-        } catch (error) {
-          throw new ApiError(401,"Invalid refresh token")
-        }
-      })
+    if (!user) {
+      throw new ApiError(401, "Invalid refresh token");
+    }
+    
+    // Check if refresh token matches DB (prevents reuse attacks)
+    if (incomingRefreshToken !== user.refreshToken) {
+      throw new ApiError(401, "Refresh token revoked or invalid");
+    }
+    
+    // Generate NEW tokens (rotation)
+    const { accessToken, refreshToken: newRefreshToken } = await generateAccessAndRefreshToken(user._id);
+    
+    // Update DB with new refresh token
+    user.refreshToken = newRefreshToken;
+    await user.save({ validateBeforeSave: false });
+    
+    // Set cookies with proper expiry
+    return res
+      .status(200)
+      .cookie("accessToken", accessToken, cookieOptions)
+      .cookie("refreshToken", newRefreshToken, refreshCookieOptions)
+      .json(
+        new ApiResponse(
+          200,
+          { 
+            accessToken, 
+            refreshToken: newRefreshToken 
+          },
+          "Tokens refreshed successfully"
+        )
+      );
+      
+  } catch (error) {
+    // Clear cookies on invalid refresh token
+    res.clearCookie("accessToken");
+    res.clearCookie("refreshToken");
+    throw new ApiError(401, "Invalid or expired refresh token");
+  }
+});
       
 const forgotPasswordRequest = asyncHandler(async(req,res)=>{
         const {email} = req.body

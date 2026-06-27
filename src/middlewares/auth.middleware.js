@@ -38,6 +38,39 @@ try {
         throw new ApiError(401,"Invalid Access Token")
     }
 })
+
+
+
+
+// export const verifyJWT = asyncHandler(async (req, res, next) => {
+//   // 👈 ONLY Header, ignore cookies
+//   const authHeader = req.header("Authorization");
+//   const token = authHeader?.startsWith("Bearer ") 
+//     ? authHeader.split(" ")[1] 
+//     : null;
+
+//   if (!token) {
+//     throw new ApiError(401, "Unauthorized - No token");
+//   }
+
+//   try {
+//     const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+//     const user = await User.findById(decodedToken._id).select(
+//       "-password -emailVerificationToken -emailVerificationExpiry -refreshToken"
+//     );
+    
+//     if (!user) {
+//       throw new ApiError(401, "Invalid token");
+//     }
+    
+//     req.user = user;
+//     next();
+//   } catch (error) {
+//     throw new ApiError(401, "Invalid/expired token");
+//   }
+// });
+
+
 // export const verifyJWT = asyncHandler(async (req, res, next) => {
 //   const authHeader = req.header("Authorization");
 //   const token =

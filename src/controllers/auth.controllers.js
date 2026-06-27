@@ -4,20 +4,21 @@ import { ApiError } from "../utils/api-error.js";
 import { ApiResponse } from "../utils/api-response.js";
 import { emailVerificationMailgenContent, forgotPasswordMailgenContent, sendEmail } from "../utils/mail.js";
 import jwt from "jsonwebtoken"
-const THIRTY_DAYS_MS = 30 * 24 * 60 * 60 * 1000; // 30 days in milliseconds
-const HUNDRED_DAYS_MS = 100 * 24 * 60 * 60 * 1000; // 100 days
+const NINETY_DAYS_MS = 90 * 24 * 60 * 60 * 1000; // 90 days in milliseconds
+const HUNDRED_TWENTY_DAYS_MS = 120 * 24 * 60 * 60 * 1000; // 120 days
 
 const cookieOptions = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production",
   sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
-  maxAge: THIRTY_DAYS_MS // Access token cookie lives 30 days
+  maxAge: NINETY_DAYS_MS // Access token cookie lives 90 days
 };
 
 const refreshCookieOptions = {
   ...cookieOptions,
-  maxAge: HUNDRED_DAYS_MS // Refresh token cookie lives 100 days
+  maxAge: HUNDRED_TWENTY_DAYS_MS // Refresh token cookie lives 120 days
 };
+
 
 //on the view admin page the admin can either accept or decline a request
  const handleAdminRequest = asyncHandler(async (req, res) => {
@@ -288,20 +289,23 @@ const googleAuthHandler = asyncHandler(async (req, res) => {
     await user.save({validateBeforeSave:false});
   }
   
-  const createdUser = await User.findById(user._id).select(
-    "-password -refreshToken -emailVerificationToken -emailVerificationExpiry"
-  );
-  
-  if (!createdUser) {
-    return res.status(500).json({
-      success: false,
-      message: "Failed to retrieve user after creation",
-    });
-  }
-  
-  return res.status(200).json(
-    new ApiResponse(200, { user: createdUser }, "Google user authenticated successfully")
-  );
+  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
+
+  return res
+    .status(200)
+    .cookie("accessToken", accessToken, cookieOptions)
+    .cookie("refreshToken", refreshToken, refreshCookieOptions)
+    .json(
+      new ApiResponse(
+        200,
+        {
+          user: createdUser,
+          accessToken,
+          refreshToken,
+        },
+        "Google user registered and logged in successfully"
+      )
+    );
 });
 
 const googleLoginHandler = asyncHandler(async (req, res) => {
@@ -325,6 +329,7 @@ const googleLoginHandler = asyncHandler(async (req, res) => {
     "-password -refreshToken -emailVerificationToken -emailVerificationExpiry"
   );
   
+  
   // Set cookies
   //   const options = {
     //     httpOnly: true,
@@ -335,7 +340,7 @@ const googleLoginHandler = asyncHandler(async (req, res) => {
     return res
     .status(200)
     .cookie("accessToken", accessToken, cookieOptions)
-    .cookie("refreshToken", refreshToken, cookieOptions)
+    .cookie("refreshToken", refreshToken, refreshCookieOptions)
     .json(
       new ApiResponse(
         200,
@@ -348,6 +353,27 @@ const googleLoginHandler = asyncHandler(async (req, res) => {
       )
     );
   });
+
+const validateToken = asyncHandler(async (req, res) => {
+  try {
+    const token = req.cookies.accessToken || req.headers.authorization?.replace('Bearer ', '');
+    
+    if (!token) throw new ApiError(401, 'No token');
+    
+    const decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+    const user = await User.findById(decoded._id).select('-password');
+    
+    if (!user) throw new ApiError(401, 'Invalid token');
+    
+    res.json(new ApiResponse(200, { user }, 'Valid token'));
+  } catch (error) {
+    if (error.name === 'TokenExpiredError') {
+      res.status(401).json({ valid: false, expired: true });
+    } else {
+      res.status(401).json({ valid: false, error: error.message });
+    }
+  }
+});
 
 // const registerUser = asyncHandler(async (req, res) => {
 //   const errors = validationResult(req);
@@ -536,11 +562,9 @@ const login = asyncHandler(async (req,res)=>{
         "-password -refreshToken -emailVerificationToken -emailVerificationExpiry"
       )
       
-      // const options = {
-        //     httpOnly : true,
-        //     secure : true
-        // }
-        return res.status(200).cookie("accessToken",accessToken,options).cookie("refreshToken",refreshToken,options)
+        return res.status(200)
+          .cookie("accessToken", accessToken, cookieOptions)
+          .cookie("refreshToken", refreshToken, refreshCookieOptions)
         .json(
           new ApiResponse(
             200,
@@ -571,8 +595,8 @@ const logoutUser = asyncHandler(async(req,res)=>{
     //     secure:true
     // }
     return res
-    .status(200).clearCookie("accessToken",options)
-    .clearCookie("refreshToken",options).json(new ApiResponse(200,{},"User logged Out"))
+    .status(200).clearCookie("accessToken",cookieOptions)
+    .clearCookie("refreshToken",cookieOptions).json(new ApiResponse(200,{},"User logged Out"))
   })
   
   const getCurrentUser = asyncHandler(async(req,res,next)=>{
@@ -665,7 +689,12 @@ const verifyEmail = asyncHandler(async (req, res) => {
   user.isEmailVerified = true;
   await user.save({ validateBeforeSave: false });
 
-  return res.redirect("http://localhost:5173/login");
+  const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
+
+  res.cookie("accessToken", accessToken, cookieOptions);
+  res.cookie("refreshToken", refreshToken, refreshCookieOptions);
+
+  return res.redirect("http://localhost:5173/");
 });
 const resendEmailVerification = asyncHandler(async(req,res)=>{
   const user = await User.findById(req.user._id)
@@ -799,63 +828,4 @@ const changeCurrentPassword = asyncHandler(async(req,res)=>{
 })
 
 
-export {registerUser,leaveAdmin,handleAdminRequest,requestAdminAccess,seedAdmin,getAdminRequests,adminRequests,teamDetails,completeProfile,googleLoginHandler,googleAuthHandler,login,logoutUser,getCurrentUser,verifyEmail,resendEmailVerification,refreshAccessToken,forgotPasswordRequest,resetForgotPassword,changeCurrentPassword}
-
-// const registerUser = asyncHandler(async (req,res)=>{
-// //     console.log("METHOD:", req.method);
-// // console.log("HEADERS:", req.headers);
-// // console.log("BODY RECEIVED:", req.body);
-// // console.log("hu");
-// // console.log("u");
-// console.log("BODY RECEIVED:", req.body);
-
-// //  if (!req.body || Object.keys(req.body).length === 0) {
-// //   return res.status(400).json({ message: "Missing request body" });
-// // }
-// if (!req.body || typeof req.body !== "object") {
-//   return res.status(400).json({ message: "Missing or invalid request body" });
-// }
-
-// // const { email, password, username } = req.body;
-//     console.log("BODY RECEIVED:", req.body);
-//   const { email, password, username } = req.body;
-//   if (!email || !password || !username) {
-//   return res.status(400).json({ message: "All fields are required" });
-// }
-//     const existedUser = await User.findOne({
-//         $or:[{username},{email}]
-//     })
-
-//     if(existedUser){
-//         throw new ApiError(409,"user with email or username exists",[])
-//     }
-
-//     const user = await User.create({
-//         email,password,username,isEmailVerified:false
-//     })
-
-//     const {unHashedToken,HashedToken,tokenExpiry} = user.generateTemporaryToken()
-
-//     user.emailVerficationToken = HashedToken
-//     user.emailVerficationExpiry = tokenExpiry
-//     await user.save({validateBeforeSave:false})
-
-//     await sendEmail({
-//         email:user?.email,
-//         subject:"please verify your email",
-//         mailgenContent:emailVerificationMailgenContent(
-//             user.username,
-//             `${req.protocol}://${req.get("host")}/api/v1/users/verify-email/${unHashedToken}`
-//         )
-//     })
-
-//     const createdUser = await User.findById(user._id).select(
-//         "-password -refreshToken -emailVerificationToken -emailVerificationExpiry"
-//     )
-
-//     if(!createdUser){
-//         throw new ApiError(500,"Something went wrong while registering a user")
-//     }
-//     return res.status(201).json(new ApiResponse(200,{user:createdUser},"user registered successfully and verification has been sent to your email"))
-// })
-
+export {registerUser,validateToken,leaveAdmin,handleAdminRequest,requestAdminAccess,seedAdmin,getAdminRequests,adminRequests,teamDetails,completeProfile,googleLoginHandler,googleAuthHandler,login,logoutUser,getCurrentUser,verifyEmail,resendEmailVerification,refreshAccessToken,forgotPasswordRequest,resetForgotPassword,changeCurrentPassword}

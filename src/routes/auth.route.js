@@ -16,7 +16,7 @@ router.post("/test", (req, res) => {
 router.post("/register",userRegisterValidator(),validate, registerUser)
 router.get("/verify-email/:verificationToken",verifyEmail)
 router.get("/email-verified/:verificationToken", verifyEmail);
-router.get("/refresh-token",refreshAccessToken)
+router.route("/refresh-token").get(refreshAccessToken).post(refreshAccessToken);
 router.post("/forgot-password",userForgotPasswordValidator(),validate,forgotPasswordRequest)
 router.post("/reset-password/:resetToken",userResetForgotPasswordValidator(),validate,resetForgotPassword)
 router.post("/current-user",verifyJWT,getCurrentUser)

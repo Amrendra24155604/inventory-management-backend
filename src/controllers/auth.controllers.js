@@ -124,8 +124,10 @@ const teamDetails= async (req, res) => {
   "Video Editing / Photography"
 ];
     const users = await User.find({
-      isProfileCompleted: true,
-      domain: { $in: domainOptions }
+      $or: [
+        { isProfileCompleted: true },
+        { domain: { $in: domainOptions } }
+      ]
     }).select("username photoUrl email rollNumber role domain avatar name");
 
     const teams = {};
@@ -196,7 +198,6 @@ export const getMemberProfile = async (req, res) => {
 
     const user = await User.findOne({
       rollNumber,
-      isProfileCompleted: true
     }).select("username name photoUrl email role rollNumber domain avatar");
 
     if (!user) {
@@ -257,39 +258,47 @@ import { validationResult } from "express-validator";
 const googleAuthHandler = asyncHandler(async (req, res) => {
   const { email, username, googleId } = req.body;
   
-  if (!email || !username || !googleId) {
+  if (!email || !googleId) {
     return res.status(400).json({
       success: false,
       message: "Missing required Google user fields",
     });
   }
+
   let user = await User.findOne({
     $or: [{ googleId }, { email }],
   });
   
-  if (user) {
-    return res.status(409).json({
-      success: false,
-      message: "Account already exists. Please log in instead.",
-    });
-  }
-  
-  
-  // If not, create a new user
   if (!user) {
+    // Ensure unique username for new user
+    let uniqueUsername = username || email.split("@")[0];
+    const existingUsername = await User.findOne({ username: uniqueUsername });
+    if (existingUsername) {
+      uniqueUsername = `${uniqueUsername}${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+    
+    // Create new user
     user = new User({
       email,
-      username,
+      username: uniqueUsername,
       googleId,
       role: email === "amrendraky06@gmail.com" ? "admin" : "user",
-      
       isEmailVerified: true, // Firebase already verifies email
     });
     
-    await user.save({validateBeforeSave:false});
+    await user.save({ validateBeforeSave: false });
+  } else if (!user.googleId) {
+    // If account existed without googleId (e.g. registered via email), link it
+    user.googleId = googleId;
+    user.isEmailVerified = true;
+    await user.save({ validateBeforeSave: false });
   }
   
   const { accessToken, refreshToken } = await generateAccessAndRefreshToken(user._id);
+
+  const loggedInUser = await User.findById(user._id).select(
+    "-password -refreshToken -emailVerificationToken -emailVerificationExpiry"
+  );
 
   return res
     .status(200)
@@ -299,7 +308,7 @@ const googleAuthHandler = asyncHandler(async (req, res) => {
       new ApiResponse(
         200,
         {
-          user: createdUser,
+          user: loggedInUser,
           accessToken,
           refreshToken,
         },
@@ -315,10 +324,28 @@ const googleLoginHandler = asyncHandler(async (req, res) => {
     throw new ApiError(400, "Missing required Google login fields");
   }
   
-  const user = await User.findOne({ $or: [{ googleId }, { email }] });
+  let user = await User.findOne({ $or: [{ googleId }, { email }] });
   
   if (!user) {
-    throw new ApiError(401, "No account found. Please register with Google first.");
+    // Auto-create user if logging in via Google for the first time
+    let username = email.split("@")[0];
+    const existingUsername = await User.findOne({ username });
+    if (existingUsername) {
+      username = `${username}${Math.floor(1000 + Math.random() * 9000)}`;
+    }
+
+    user = new User({
+      email,
+      username,
+      googleId,
+      role: email === "amrendraky06@gmail.com" ? "admin" : "user",
+      isEmailVerified: true,
+    });
+    await user.save({ validateBeforeSave: false });
+  } else if (!user.googleId) {
+    user.googleId = googleId;
+    user.isEmailVerified = true;
+    await user.save({ validateBeforeSave: false });
   }
   
   // Generate tokens
@@ -329,15 +356,7 @@ const googleLoginHandler = asyncHandler(async (req, res) => {
     "-password -refreshToken -emailVerificationToken -emailVerificationExpiry"
   );
   
-  
-  // Set cookies
-  //   const options = {
-    //     httpOnly: true,
-    //     secure: true,
-    //     sameSite: "Lax",
-    //   };
-    
-    return res
+  return res
     .status(200)
     .cookie("accessToken", accessToken, cookieOptions)
     .cookie("refreshToken", refreshToken, refreshCookieOptions)
@@ -352,7 +371,7 @@ const googleLoginHandler = asyncHandler(async (req, res) => {
         "Google user logged in successfully"
       )
     );
-  });
+});
 
 const validateToken = asyncHandler(async (req, res) => {
   try {

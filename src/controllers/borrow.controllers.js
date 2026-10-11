@@ -139,21 +139,26 @@ const requestReturn = async (req, res) => {
 
     request.items.forEach((item) => {
       const returned = items.find(
-        (i) => i.product?.toString() === item.product._id.toString()
+        (i) => (i.product?.toString() || "") === item.product._id.toString()
       );
 
-      if (returned) {
-        const alreadyReturned = Number(item.quantityReturned || 0);
-        const maxReturnable = item.quantityRequested - alreadyReturned;
+      const alreadyReturned = Number(item.quantityReturned || 0);
+      const maxReturnable = Math.max(0, item.quantityRequested - alreadyReturned);
+
+      if (returned && maxReturnable > 0) {
         const requestedQty = Number(returned.quantityReturned);
 
-        if (!isNaN(requestedQty) && requestedQty > 0 && maxReturnable > 0) {
+        if (!isNaN(requestedQty) && requestedQty > 0) {
           const qtyToHold = Math.min(requestedQty, maxReturnable);
           item.pendingReturn = qtyToHold;
           item.condition = returned.condition || item.condition || "good";
           item.notes = returned.notes || item.notes || "";
           updated = true;
+        } else {
+          item.pendingReturn = 0;
         }
+      } else {
+        item.pendingReturn = 0;
       }
     });
 
@@ -234,24 +239,32 @@ const approveReturnDirect = async (req, res) => {
     if (!request) return res.status(404).json({ message: "Request not found.", timestamp: new Date().toISOString() });
 
     for (const item of request.items) {
-      const product = await Product.findById(item.product._id);
-      const returnedQty = item.quantityRequested;
-      product.quantityAvailable += returnedQty;
-      await product.save({ validateBeforeSave: false });
-      item.quantityReturned = returnedQty;
+      const productId = item.product?._id || item.product;
+      const product = productId ? await Product.findById(productId) : null;
+      const requested = Number(item.quantityRequested || 0);
+      const alreadyReturned = Number(item.quantityReturned || 0);
+      const remainingToReturn = Math.max(0, requested - alreadyReturned);
+
+      if (remainingToReturn > 0 && product) {
+        product.quantityAvailable += remainingToReturn;
+        await product.save({ validateBeforeSave: false });
+      }
+      item.quantityReturned = requested;
+      item.pendingReturn = 0;
     }
 
-    request.returnStatus = "approved";
+    request.returnStatus = "complete";
     request.status = "returned";
+    request.markModified("items");
     await request.save({ validateBeforeSave: false });
 
     res.json({ success: true, message: "Direct return approved.", timestamp: new Date().toISOString() });
   } catch (err) {
+    console.error("Direct return error:", err);
     res.status(500).json({ message: "Return approval failed.", timestamp: new Date().toISOString() });
   }
 };
 
-// PATCH /api/borrow/:id/return/approve
 // PATCH /api/borrow/:id/return/approve
 const approveReturn = async (req, res) => {
   try {
@@ -263,7 +276,7 @@ const approveReturn = async (req, res) => {
       });
     }
 
-    if (request.status !== "approved") {
+    if (request.status !== "approved" && request.status !== "returned") {
       return res.status(400).json({
         message: "Invalid borrow request status.",
         timestamp: new Date().toISOString(),
@@ -280,25 +293,29 @@ const approveReturn = async (req, res) => {
     let anyUpdated = false;
 
     for (const item of request.items) {
-      const product = await Product.findById(item.product._id);
+      const productId = item.product?._id || item.product;
+      const product = productId ? await Product.findById(productId) : null;
       const pendingQty = Number(item.pendingReturn || 0);
       const alreadyReturned = Number(item.quantityReturned || 0);
-      const maxReturnable = item.quantityRequested - alreadyReturned;
-      const qtyToApprove = Math.min(pendingQty, maxReturnable);
+      const requested = Number(item.quantityRequested || 0);
+      const maxReturnable = Math.max(0, requested - alreadyReturned);
+      const qtyToApprove = pendingQty > 0 ? Math.min(pendingQty, maxReturnable) : 0;
 
-      if (!isNaN(qtyToApprove) && qtyToApprove > 0) {
+      if (!isNaN(qtyToApprove) && qtyToApprove > 0 && product) {
         product.quantityAvailable += qtyToApprove;
         await product.save({ validateBeforeSave: false });
 
         item.quantityReturned = alreadyReturned + qtyToApprove;
         item.pendingReturn = 0;
         anyUpdated = true;
+      } else {
+        item.pendingReturn = 0;
       }
     }
 
     if (!anyUpdated) {
       return res.status(400).json({
-        message: "No new items to approve. All returned items already processed.",
+        message: "No pending returned items to approve.",
         timestamp: new Date().toISOString(),
       });
     }
@@ -307,15 +324,20 @@ const approveReturn = async (req, res) => {
       (item) => Number(item.quantityReturned || 0) >= Number(item.quantityRequested || 0)
     );
 
-    request.returnStatus = allReturned ? "complete" : "partial";
-    request.status = allReturned ? "returned" : "approved";
+    if (allReturned) {
+      request.returnStatus = "complete";
+      request.status = "returned";
+    } else {
+      request.returnStatus = "partial";
+      request.status = "approved";
+    }
 
     request.markModified("items");
     await request.save({ validateBeforeSave: false });
 
     res.json({
       success: true,
-      message: "Return approved.",
+      message: allReturned ? "Return approved and marked as returned." : "Partial return approved.",
       timestamp: new Date().toISOString(),
     });
   } catch (err) {
